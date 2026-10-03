@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Financiero VE 🇻🇪</title>
+    
+    <!-- Configuración PWA / Acceso Directo Móvil -->
+    <meta name="theme-color" content="#2563eb">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Finanzas VE">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2953/2953361.png">
+    
+    <!-- Web Manifest dinámico -->
+    <link rel="manifest" id="manifest-placeholder">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .opt-por-pagar {
+            color: #dc2626 !important;
+            font-weight: 600;
+        }
+        .opt-por-cobrar {
+            color: #16a34a !important;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 p-4 sm:p-6 pb-20">
+
+    <div class="max-w-5xl mx-auto space-y-6">
+        
+        <!-- Banner para instalar si el navegador lo permite -->
+        <div id="install-banner" class="hidden bg-blue-50 border border-blue-200 p-3 rounded-xl flex items-center justify-between shadow-sm">
+            <div class="flex items-center space-x-3">
+                <span class="text-2xl">📲</span>
+                <div>
+                    <h4 class="text-sm font-bold text-blue-900">Instalar App en el teléfono</h4>
+                    <p class="text-xs text-blue-700">Agrégala a tu pantalla de inicio para usarla rápido.</p>
+                </div>
+            </div>
+            <button id="btn-install" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm">
+                Instalar
+            </button>
+        </div>
+
+        <!-- Encabezado -->
+        <header class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div>
+                <h1 class="text-xl font-bold text-gray-900">Gestor Financiero Multidivisa 🇻🇪</h1>
+                <p class="text-xs text-gray-500" id="current-date"></p>
+            </div>
+            <button onclick="clearData()" class="text-xs text-red-500 hover:underline">Reiniciar Todo</button>
+        </header>
+
+        <!-- Configuración de Tasas -->
+        <section class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+            <h2 class="text-md font-semibold mb-3 text-gray-700">1. Tasas de Cambio (Bs. / USD)</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Tasa BCV (Oficial)</label>
+                    <input type="number" id="rate-bcv" step="0.01" value="871.37" onchange="saveAndRender()" 
+                        class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Tasa Binance / USDT</label>
+                    <input type="number" id="rate-crypto" step="0.01" value="972.95" onchange="saveAndRender()" 
+                        class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+            </div>
+        </section>
+
+        <!-- Resumen de Balance -->
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-blue-600 text-white p-5 rounded-xl shadow-md space-y-3">
+                <span class="text-xs uppercase tracking-wider opacity-80">Saldo Total Consolidado</span>
+                <div class="text-3xl font-extrabold" id="total-ves">0.00 Bs.</div>
+                <div class="text-sm opacity-90 border-t border-blue-400/40 pt-2 flex justify-between">
+                    <span>Equivalente Total USD (BCV):</span>
+                    <span id="total-usd-equiv" class="font-bold">0.00 $</span>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 space-y-2">
+                <h3 class="text-xs font-bold text-gray-500 uppercase">Equivalencia del saldo según tasa:</h3>
+                <div class="flex justify-between items-center text-sm py-2 border-b">
+                    <span class="text-gray-600">Oficial (BCV):</span>
+                    <span class="font-semibold text-gray-900" id="equiv-bcv">0.00 $</span>
+                </div>
+                <div class="flex justify-between items-center text-sm py-2">
+                    <span class="text-gray-600">Crypto (USDT Binance):</span>
+                    <span class="font-semibold text-gray-900" id="equiv-crypto">0.00 $</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Control de Deudas y Cobros -->
+        <section class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 space-y-4">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <div class="flex items-center gap-2">
+                    <h2 class="text-md font-semibold text-gray-700">2. Control de Deudas y Cuentas por Cobrar</h2>
+                    <span class="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100 font-medium">Ordenado por fecha 📅</span>
+                </div>
+                <div class="flex gap-2">
+                    <div class="text-xs font-medium bg-red-50 text-red-600 px-3 py-1 rounded-full border border-red-100">
+                        Por Pagar: <span id="debt-total-summary" class="font-bold">0.00 $</span>
+                    </div>
+                    <div class="text-xs font-medium bg-green-50 text-green-600 px-3 py-1 rounded-full border border-green-100">
+                        Por Cobrar: <span id="credit-total-summary" class="font-bold">0.00 $</span>
+                    </div>
+                </div>
+            </div>
+
+            <form id="debt-form" class="grid grid-cols-1 sm:grid-cols-7 gap-3" onsubmit="saveDebt(event)">
+                <input type="hidden" id="debt-id" value="">
+                
+                <select id="debt-type" onchange="updateSelectColor(this)" class="border rounded-lg p-2 text-sm bg-gray-50 font-semibold outline-none text-red-600">
+                    <option value="por_pagar" class="opt-por-pagar">Por Pagar</option>
+                    <option value="por_cobrar" class="opt-por-cobrar">Por Cobrar</option>
+                </select>
+                <select id="debt-currency" class="border rounded-lg p-2 text-sm bg-gray-50 outline-none">
+                    <option value="USD">Dólares ($)</option>
+                    <option value="VES">Bolívares (Bs)</option>
+                </select>
+                <input type="text" id="debt-person" placeholder="Persona / Ente" required
+                    class="border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                <input type="number" id="debt-amount" step="0.01" placeholder="Monto" required
+                    class="border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                <input type="date" id="debt-date" required
+                    class="border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                <input type="text" id="debt-desc" placeholder="Concepto" required
+                    class="border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                
+                <div class="flex gap-1">
+                    <button type="submit" id="debt-btn-submit"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm p-2 transition-colors w-full">
+                        Registrar
+                    </button>
+                    <button type="button" id="debt-btn-cancel" onclick="resetDebtForm()"
+                        class="hidden bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium rounded-lg text-sm px-2 transition-colors">
+                        ✕
+                    </button>
+                </div>
+            </form>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm text-gray-600">
+                    <thead class="bg-gray-50 text-gray-700 uppercase text-xs">
+                        <tr>
+                            <th class="p-3">Tipo</th>
+                            <th class="p-3">Persona / Entidad</th>
+                            <th class="p-3">Monto Original</th>
+                            <th class="p-3">Equivalente Aprox.</th>
+                            <th class="p-3">Vencimiento 📅</th>
+                            <th class="p-3 text-center">Estado</th>
+                            <th class="p-3 text-center">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="debt-history" class="divide-y"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Formulario Ingresos / Egresos -->
+        <section class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+            <h2 class="text-md font-semibold mb-3 text-gray-700">3. Registrar Movimiento Diario</h2>
+            <form id="tx-form" class="grid grid-cols-1 sm:grid-cols-5 gap-3" onsubmit="addTransaction(event)">
+                <select id="tx-type" class="border rounded-lg p-2 text-sm bg-gray-50 outline-none">
+                    <option value="ingreso">➕ Ingreso</option>
+                    <option value="egreso">➖ Egreso</option>
+                </select>
+                <select id="tx-currency" class="border rounded-lg p-2 text-sm bg-gray-50 outline-none">
+                    <option value="VES">Bolívares (Bs)</option>
+                    <option value="USD">Dólares ($)</option>
+                </select>
+                <input type="number" id="tx-amount" step="0.01" placeholder="Monto" required
+                    class="border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                <input type="text" id="tx-desc" placeholder="Descripción" required
+                    class="border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                <button type="submit" 
+                    class="bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg text-sm p-2 transition-colors">
+                    Guardar
+                </button>
+            </form>
+        </section>
+
+        <!-- Historial de Movimientos -->
+        <section class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+            <h2 class="text-md font-semibold mb-3 text-gray-700">4. Historial Diario</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm text-gray-600">
+                    <thead class="bg-gray-50 text-gray-700 uppercase text-xs">
+                        <tr>
+                            <th class="p-3">Tipo</th>
+                            <th class="p-3">Descripción</th>
+                            <th class="p-3">Monto Original</th>
+                            <th class="p-3">Monto Equivalente</th>
+                            <th class="p-3 text-center">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tx-history" class="divide-y"></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // Generar Manifest PWA dinámicamente
+        const myManifest = {
+            "name": "Gestor Financiero VE",
+            "short_name": "Finanzas VE",
+            "start_url": ".",
+            "display": "standalone",
+            "background_color": "#ffffff",
+            "theme_color": "#2563eb",
+            "icons": [
+                {
+                    "src": "https://cdn-icons-png.flaticon.com/512/2953/2953361.png",
+                    "sizes": "512x512",
+                    "type": "image/png"
+                }
+            ]
+        };
+        const stringManifest = JSON.stringify(myManifest);
+        const blob = new Blob([stringManifest], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(blob);
+        document.querySelector('#manifest-placeholder').setAttribute('href', manifestURL);
+
+        // Evento de Instalación PWA
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            document.getElementById('install-banner').classList.remove('hidden');
+        });
+
+        document.getElementById('btn-install').addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    document.getElementById('install-banner').classList.add('hidden');
+                }
+                deferredPrompt = null;
+            }
+        });
+
+        document.getElementById('current-date').innerText = new Date().toLocaleDateString('es-VE', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        });
+
+        let transactions = JSON.parse(localStorage.getItem('ve_finances_txs')) || [];
+        let debts = JSON.parse(localStorage.getItem('ve_finances_debts')) || [];
+
+        function updateSelectColor(selectElem) {
+            if (selectElem.value === 'por_pagar') {
+                selectElem.className = "border rounded-lg p-2 text-sm bg-gray-50 font-semibold outline-none text-red-600";
+            } else {
+                selectElem.className = "border rounded-lg p-2 text-sm bg-gray-50 font-semibold outline-none text-green-600";
+            }
+        }
+
+        function saveAndRender() {
+            localStorage.setItem('ve_finances_txs', JSON.stringify(transactions));
+            localStorage.setItem('ve_finances_debts', JSON.stringify(debts));
+            renderHistory();
+            renderDebts();
+            calculateTotals();
+        }
+
+        function addTransaction(e) {
+            e.preventDefault();
+            const type = document.getElementById('tx-type').value;
+            const currency = document.getElementById('tx-currency').value;
+            const amount = parseFloat(document.getElementById('tx-amount').value);
+            const desc = document.getElementById('tx-desc').value;
+
+            transactions.push({ id: Date.now(), type, currency, amount, desc });
+            document.getElementById('tx-amount').value = '';
+            document.getElementById('tx-desc').value = '';
+            saveAndRender();
+        }
+
+        function saveDebt(e) {
+            e.preventDefault();
+            const id = document.getElementById('debt-id').value;
+            const type = document.getElementById('debt-type').value;
+            const currency = document.getElementById('debt-currency').value;
+            const person = document.getElementById('debt-person').value;
+            const amount = parseFloat(document.getElementById('debt-amount').value);
+            const dueDate = document.getElementById('debt-date').value;
+            const desc = document.getElementById('debt-desc').value;
+
+            if (id) {
+                debts = debts.map(d => d.id === parseInt(id) ? { ...d, type, currency, person, amount, dueDate, desc } : d);
+            } else {
+                debts.push({ id: Date.now(), type, currency, person, amount, dueDate, desc, status: 'pendiente' });
+            }
+
+            resetDebtForm();
+            saveAndRender();
+        }
+
+        function editDebt(id) {
+            const debt = debts.find(d => d.id === id);
+            if (!debt) return;
+
+            document.getElementById('debt-id').value = debt.id;
+            document.getElementById('debt-type').value = debt.type;
+            document.getElementById('debt-currency').value = debt.currency;
+            document.getElementById('debt-person').value = debt.person;
+            document.getElementById('debt-amount').value = debt.amount;
+            document.getElementById('debt-date').value = debt.dueDate;
+            document.getElementById('debt-desc').value = debt.desc;
+
+            updateSelectColor(document.getElementById('debt-type'));
+
+            document.getElementById('debt-btn-submit').innerText = 'Guardar';
+            document.getElementById('debt-btn-submit').className = 'bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-lg text-sm p-2 transition-colors w-full';
+            document.getElementById('debt-btn-cancel').classList.remove('hidden');
+        }
+
+        function resetDebtForm() {
+            document.getElementById('debt-id').value = '';
+            document.getElementById('debt-person').value = '';
+            document.getElementById('debt-amount').value = '';
+            document.getElementById('debt-date').value = '';
+            document.getElementById('debt-desc').value = '';
+            document.getElementById('debt-btn-submit').innerText = 'Registrar';
+            document.getElementById('debt-btn-submit').className = 'bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm p-2 transition-colors w-full';
+            document.getElementById('debt-btn-cancel').classList.add('hidden');
+        }
+
+        function toggleDebtStatus(id) {
+            debts = debts.map(d => d.id === id ? { ...d, status: d.status === 'pendiente' ? 'pagado' : 'pendiente' } : d);
+            saveAndRender();
+        }
+
+        function deleteDebt(id) {
+            debts = debts.filter(d => d.id !== id);
+            if (document.getElementById('debt-id').value == id) resetDebtForm();
+            saveAndRender();
+        }
+
+        function deleteTransaction(id) {
+            transactions = transactions.filter(t => t.id !== id);
+            saveAndRender();
+        }
+
+        function clearData() {
+            if(confirm("¿Seguro que deseas borrar todos los registros y deudas?")) {
+                transactions = [];
+                debts = [];
+                resetDebtForm();
+                saveAndRender();
+            }
+        }
+
+        function calculateTotals() {
+            const bcv = parseFloat(document.getElementById('rate-bcv').value) || 1;
+            const crypto = parseFloat(document.getElementById('rate-crypto').value) || 1;
+
+            let totalVes = 0;
+
+            transactions.forEach(t => {
+                let valVes = t.currency === 'USD' ? t.amount * bcv : t.amount;
+                totalVes += (t.type === 'ingreso' ? valVes : -valVes);
+            });
+
+            debts.filter(d => d.status === 'pagado').forEach(d => {
+                let valVes = d.currency === 'USD' ? d.amount * bcv : d.amount;
+                if (d.type === 'por_cobrar') {
+                    totalVes += valVes;
+                } else {
+                    totalVes -= valVes;
+                }
+            });
+
+            let pendingDebtUsd = 0;
+            let pendingCreditUsd = 0;
+
+            debts.filter(d => d.status === 'pendiente').forEach(d => {
+                let amtUsd = d.currency === 'USD' ? d.amount : d.amount / bcv;
+                if (d.type === 'por_pagar') {
+                    pendingDebtUsd += amtUsd;
+                } else {
+                    pendingCreditUsd += amtUsd;
+                }
+            });
+
+            document.getElementById('total-ves').innerText = `${totalVes.toLocaleString('es-VE', {minimumFractionDigits: 2})} Bs.`;
+            document.getElementById('total-usd-equiv').innerText = `${(totalVes / bcv).toFixed(2)} $`;
+            document.getElementById('debt-total-summary').innerText = `${pendingDebtUsd.toFixed(2)} $`;
+            document.getElementById('credit-total-summary').innerText = `${pendingCreditUsd.toFixed(2)} $`;
+
+            document.getElementById('equiv-bcv').innerText = `${(totalVes / bcv).toFixed(2)} $`;
+            document.getElementById('equiv-crypto').innerText = `${(totalVes / crypto).toFixed(2)} $`;
+        }
+
+        function renderDebts() {
+            const tbody = document.getElementById('debt-history');
+            const bcv = parseFloat(document.getElementById('rate-bcv').value) || 1;
+            tbody.innerHTML = '';
+
+            if(debts.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-400">No hay deudas o cuentas pendientes registradas.</td></tr>`;
+                return;
+            }
+
+            debts.sort((a, b) => {
+                if (a.status !== b.status) {
+                    return a.status === 'pendiente' ? -1 : 1;
+                }
+                return new Date(a.dueDate) - new Date(b.dueDate);
+            });
+
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            debts.forEach(d => {
+                const row = document.createElement('tr');
+                const isPorPagar = d.type === 'por_pagar';
+                const isPaid = d.status === 'pagado';
+                
+                let equivText = d.currency === 'USD' 
+                    ? `${(d.amount * bcv).toLocaleString('es-VE', {minimumFractionDigits: 2})} Bs.` 
+                    : `${(d.amount / bcv).toFixed(2)} $`;
+
+                let statusButtonClass = '';
+                let statusButtonText = '';
+
+                if (isPaid) {
+                    statusButtonClass = 'bg-gray-200 text-gray-700 hover:bg-gray-300';
+                    statusButtonText = '✓ COBRADO / PAGADO';
+                } else if (isPorPagar) {
+                    statusButtonClass = 'bg-red-100 text-red-800 hover:bg-red-200';
+                    statusButtonText = '⏳ PENDIENTE POR PAGAR';
+                } else {
+                    statusButtonClass = 'bg-green-100 text-green-800 hover:bg-green-200';
+                    statusButtonText = '⏳ PENDIENTE POR COBRAR';
+                }
+
+                let dateStyleClass = 'text-gray-700 font-medium';
+                if (!isPaid) {
+                    if (d.dueDate < todayStr) {
+                        dateStyleClass = 'text-red-600 font-bold bg-red-50 px-1.5 py-0.5 rounded';
+                    } else if (d.dueDate === todayStr) {
+                        dateStyleClass = 'text-orange-600 font-bold bg-orange-50 px-1.5 py-0.5 rounded';
+                    }
+                }
+
+                row.className = isPaid ? 'opacity-50 bg-gray-50' : '';
+                row.innerHTML = `
+                    <td class="p-3"><span class="px-2 py-1 text-xs font-semibold rounded ${isPorPagar ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}">${isPorPagar ? 'POR PAGAR' : 'POR COBRAR'}</span></td>
+                    <td class="p-3 font-medium text-gray-800">${d.person} <br><span class="text-xs text-gray-400">${d.desc}</span></td>
+                    <td class="p-3 font-semibold text-gray-900">${d.amount.toFixed(2)} ${d.currency === 'USD' ? '$' : 'Bs.'}</td>
+                    <td class="p-3 text-xs text-gray-500">${equivText} (BCV)</td>
+                    <td class="p-3 text-xs"><span class="${dateStyleClass}">${d.dueDate}</span></td>
+                    <td class="p-3 text-center">
+                        <button onclick="toggleDebtStatus(${d.id})" class="px-2.5 py-1 text-xs rounded-full font-bold transition-colors ${statusButtonClass}">
+                            ${statusButtonText}
+                        </button>
+                    </td>
+                    <td class="p-3 text-center">
+                        <div class="flex items-center justify-center gap-2">
+                            <button onclick="editDebt(${d.id})" title="Editar" class="text-blue-600 hover:text-blue-800 font-bold">✏️</button>
+                            <button onclick="deleteDebt(${d.id})" title="Eliminar" class="text-red-500 hover:text-red-700 font-bold">✕</button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function renderHistory() {
+            const tbody = document.getElementById('tx-history');
+            const bcv = parseFloat(document.getElementById('rate-bcv').value) || 1;
+            tbody.innerHTML = '';
+
+            if(transactions.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-400">No hay movimientos diarios registrados.</td></tr>`;
+                return;
+            }
+
+            transactions.forEach(t => {
+                const row = document.createElement('tr');
+                const isIngreso = t.type === 'ingreso';
+                
+                let equivText = t.currency === 'USD' 
+                    ? `${(t.amount * bcv).toLocaleString('es-VE', {minimumFractionDigits: 2})} Bs.` 
+                    : `${(t.amount / bcv).toFixed(2)} $`;
+
+                row.innerHTML = `
+                    <td class="p-3"><span class="px-2 py-1 text-xs rounded ${isIngreso ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${t.type.toUpperCase()}</span></td>
+                    <td class="p-3 font-medium text-gray-800">${t.desc}</td>
+                    <td class="p-3 font-semibold ${isIngreso ? 'text-green-600' : 'text-red-600'}">${isIngreso ? '+' : '-'}${t.amount.toFixed(2)} ${t.currency === 'USD' ? '$' : 'Bs.'}</td>
+                    <td class="p-3 text-xs text-gray-500">${equivText}</td>
+                    <td class="p-3 text-center"><button onclick="deleteTransaction(${t.id})" class="text-red-500 hover:text-red-700 font-bold">✕</button></td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        saveAndRender();
+    </script>
+</body>
+</html>
