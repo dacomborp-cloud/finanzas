@@ -61,13 +61,13 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-xs font-medium text-gray-600 mb-1">Tasa BCV (Oficial)</label>
-                    <input type="number" id="rate-bcv" step="0.01" value="871.37" onchange="saveAndRender()" 
-                        class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    <input type="number" id="rate-bcv" step="0.01" value="871.37" oninput="saveAndRender()" 
+                        class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-semibold">
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-gray-600 mb-1">Tasa Binance / USDT</label>
-                    <input type="number" id="rate-crypto" step="0.01" value="972.95" onchange="saveAndRender()" 
-                        class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    <input type="number" id="rate-crypto" step="0.01" value="972.95" oninput="saveAndRender()" 
+                        class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-semibold">
                 </div>
             </div>
         </section>
@@ -254,6 +254,11 @@
         let transactions = JSON.parse(localStorage.getItem('ve_finances_txs')) || [];
         let debts = JSON.parse(localStorage.getItem('ve_finances_debts')) || [];
 
+        // Cargar tasas guardadas o usar las por defecto si es la primera vez
+        let savedRates = JSON.parse(localStorage.getItem('ve_finances_rates')) || { bcv: 871.37, crypto: 972.95 };
+        document.getElementById('rate-bcv').value = savedRates.bcv;
+        document.getElementById('rate-crypto').value = savedRates.crypto;
+
         function updateSelectColor(selectElem) {
             if (selectElem.value === 'por_pagar') {
                 selectElem.className = "border rounded-lg p-2 text-sm bg-gray-50 font-semibold outline-none text-red-600";
@@ -263,8 +268,15 @@
         }
 
         function saveAndRender() {
+            // Guardar transacciones y deudas
             localStorage.setItem('ve_finances_txs', JSON.stringify(transactions));
             localStorage.setItem('ve_finances_debts', JSON.stringify(debts));
+
+            // Guardar Tasas de Cambio
+            const bcvVal = parseFloat(document.getElementById('rate-bcv').value) || 0;
+            const cryptoVal = parseFloat(document.getElementById('rate-crypto').value) || 0;
+            localStorage.setItem('ve_finances_rates', JSON.stringify({ bcv: bcvVal, crypto: cryptoVal }));
+
             renderHistory();
             renderDebts();
             calculateTotals();
