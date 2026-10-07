@@ -10,7 +10,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Finanzas Joseph">
+    <meta name="apple-mobile-web-app-title" content="Finanzas VE">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2953/2953361.png">
     
     <!-- Web Manifest dinámico -->
@@ -28,7 +28,7 @@
         }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen text-gray-800 p-4 sm:p-6 pb-20">
+<body class="bg-gray-100 min-h-screen text-gray-800 p-4 sm:p-6 pb-24 relative">
 
     <div class="max-w-5xl mx-auto space-y-6">
         
@@ -206,11 +206,100 @@
         </section>
     </div>
 
+    <!-- Botón Flotante para la Calculadora -->
+    <button onclick="toggleCalc()" class="fixed bottom-5 right-5 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-lg z-40 transition-transform transform active:scale-95 flex items-center justify-center text-xl" title="Abrir Calculadora">
+        🧮
+    </button>
+
+    <!-- Panel Flotante de la Calculadora -->
+    <div id="calc-panel" class="hidden fixed bottom-20 right-5 w-72 bg-gray-900 text-white p-4 rounded-2xl shadow-2xl z-50 border border-gray-700 space-y-3">
+        <div class="flex justify-between items-center border-b border-gray-700 pb-2">
+            <span class="text-xs font-bold text-gray-300 uppercase tracking-wider">Calculadora Rápida</span>
+            <button onclick="toggleCalc()" class="text-gray-400 hover:text-white font-bold text-sm">✕</button>
+        </div>
+        
+        <!-- Pantalla de Calculadora -->
+        <div id="calc-screen" class="bg-gray-800 text-right text-2xl p-3 rounded-lg font-mono tracking-wide overflow-x-auto min-h-[52px] flex items-center justify-end text-green-400 font-bold border border-gray-700">0</div>
+
+        <!-- Teclado de Calculadora -->
+        <div class="grid grid-cols-4 gap-2 text-sm font-semibold">
+            <button onclick="calcClear()" class="bg-red-500 hover:bg-red-600 p-3 rounded-lg text-white">C</button>
+            <button onclick="calcInput('/')" class="bg-gray-700 hover:bg-gray-600 p-3 rounded-lg text-blue-400">÷</button>
+            <button onclick="calcInput('*')" class="bg-gray-700 hover:bg-gray-600 p-3 rounded-lg text-blue-400">×</button>
+            <button onclick="calcDelete()" class="bg-gray-700 hover:bg-gray-600 p-3 rounded-lg text-orange-400">⌫</button>
+
+            <button onclick="calcInput('7')" class="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg">7</button>
+            <button onclick="calcInput('8')" class="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg">8</button>
+            <button onclick="calcInput('9')" class="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg">9</button>
+            <button onclick="calcInput('-')" class="bg-gray-700 hover:bg-gray-600 p-3 rounded-lg text-blue-400">-</button>
+
+            <button onclick="calcInput('4')" class="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg">4</button>
+            <button onclick="calcInput('5')" class="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg">5</button>
+            <button onclick="calcInput('6')" class="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg">6</button>
+            <button onclick="calcInput('+')" class="bg-gray-700 hover:bg-gray-600 p-3 rounded-lg text-blue-400">+</button>
+
+            <button onclick="calcInput('1')" class="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg">1</button>
+            <button onclick="calcInput('2')" class="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg">2</button>
+            <button onclick="calcInput('3')" class="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg">3</button>
+            <button onclick="calcEqual()" class="bg-blue-600 hover:bg-blue-500 p-3 rounded-lg row-span-2 text-white font-bold flex items-center justify-center">=</button>
+
+            <button onclick="calcInput('0')" class="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg col-span-2">0</button>
+            <button onclick="calcInput('.')" class="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg">.</button>
+        </div>
+    </div>
+
     <script>
+        // Lógica del Panel Flotante de la Calculadora
+        let calcExpr = '0';
+
+        function toggleCalc() {
+            const panel = document.getElementById('calc-panel');
+            panel.classList.toggle('hidden');
+        }
+
+        function updateCalcScreen() {
+            document.getElementById('calc-screen').innerText = calcExpr;
+        }
+
+        function calcInput(val) {
+            if (calcExpr === '0' && val !== '.') {
+                calcExpr = val;
+            } else {
+                calcExpr += val;
+            }
+            updateCalcScreen();
+        }
+
+        function calcClear() {
+            calcExpr = '0';
+            updateCalcScreen();
+        }
+
+        function calcDelete() {
+            if (calcExpr.length > 1) {
+                calcExpr = calcExpr.slice(0, -1);
+            } else {
+                calcExpr = '0';
+            }
+            updateCalcScreen();
+        }
+
+        function calcEqual() {
+            try {
+                // Evaluar expresión matemática limpiando caracteres no permitidos
+                let cleanExpr = calcExpr.replace(/[^0-9+\-*/.]/g, '');
+                let res = eval(cleanExpr);
+                calcExpr = Number.isInteger(res) ? res.toString() : res.toFixed(2).toString();
+            } catch (err) {
+                calcExpr = 'Error';
+            }
+            updateCalcScreen();
+        }
+
         // Generar Manifest PWA dinámicamente
         const myManifest = {
-            "name": "Gestor Financiero Joseph",
-            "short_name": "Finanzas Joseph",
+            "name": "Gestor Financiero VE",
+            "short_name": "Finanzas VE",
             "start_url": ".",
             "display": "standalone",
             "background_color": "#ffffff",
@@ -254,7 +343,7 @@
         let transactions = JSON.parse(localStorage.getItem('ve_finances_txs')) || [];
         let debts = JSON.parse(localStorage.getItem('ve_finances_debts')) || [];
 
-        // Cargar tasas guardadas o usar las por defecto si es la primera vez
+        // Cargar tasas guardadas o usar las por defecto
         let savedRates = JSON.parse(localStorage.getItem('ve_finances_rates')) || { bcv: 871.37, crypto: 972.95 };
         document.getElementById('rate-bcv').value = savedRates.bcv;
         document.getElementById('rate-crypto').value = savedRates.crypto;
@@ -268,11 +357,9 @@
         }
 
         function saveAndRender() {
-            // Guardar transacciones y deudas
             localStorage.setItem('ve_finances_txs', JSON.stringify(transactions));
             localStorage.setItem('ve_finances_debts', JSON.stringify(debts));
 
-            // Guardar Tasas de Cambio
             const bcvVal = parseFloat(document.getElementById('rate-bcv').value) || 0;
             const cryptoVal = parseFloat(document.getElementById('rate-crypto').value) || 0;
             localStorage.setItem('ve_finances_rates', JSON.stringify({ bcv: bcvVal, crypto: cryptoVal }));
@@ -402,7 +489,7 @@
                 }
             });
 
-            document.getElementById('total-ves').innerText = `${totalVes.toLocaleString('es-VE', {minimumFractionDigits: 2})} Bs.`;
+            document.getElementById('total-ves').innerText = `${totalVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs.`;
             document.getElementById('total-usd-equiv').innerText = `${(totalVes / bcv).toFixed(2)} $`;
             document.getElementById('debt-total-summary').innerText = `${pendingDebtUsd.toFixed(2)} $`;
             document.getElementById('credit-total-summary').innerText = `${pendingCreditUsd.toFixed(2)} $`;
@@ -436,7 +523,7 @@
                 const isPaid = d.status === 'pagado';
                 
                 let equivText = d.currency === 'USD' 
-                    ? `${(d.amount * bcv).toLocaleString('es-VE', {minimumFractionDigits: 2})} Bs.` 
+                    ? `${(d.amount * bcv).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs.` 
                     : `${(d.amount / bcv).toFixed(2)} $`;
 
                 let statusButtonClass = '';
@@ -500,7 +587,7 @@
                 const isIngreso = t.type === 'ingreso';
                 
                 let equivText = t.currency === 'USD' 
-                    ? `${(t.amount * bcv).toLocaleString('es-VE', {minimumFractionDigits: 2})} Bs.` 
+                    ? `${(t.amount * bcv).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs.` 
                     : `${(t.amount / bcv).toFixed(2)} $`;
 
                 row.innerHTML = `
