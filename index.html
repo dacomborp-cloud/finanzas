@@ -98,11 +98,21 @@
 
         <!-- Control de Deudas y Cobros -->
         <section class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 space-y-4">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
                 <div class="flex items-center gap-2">
                     <h2 class="text-md font-semibold text-gray-700">2. Control de Deudas y Cuentas por Cobrar</h2>
                     <span class="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100 font-medium">Ordenado por fecha 📅</span>
                 </div>
+
+                <!-- Filtro por Persona / Entidad -->
+                <div class="flex items-center gap-2 w-full md:w-auto">
+                    <label class="text-xs font-semibold text-gray-500 whitespace-nowrap">Filtrar por:</label>
+                    <select id="filter-person" onchange="renderDebts()" class="border rounded-lg p-1.5 text-xs bg-gray-50 outline-none w-full md:w-48 font-medium text-gray-700 focus:ring-2 focus:ring-blue-500">
+                        <option value="">-- Todos --</option>
+                    </select>
+                    <button onclick="clearPersonFilter()" title="Limpiar filtro" class="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded-lg transition-colors font-bold">✕</button>
+                </div>
+
                 <div class="flex gap-2">
                     <div class="text-xs font-medium bg-red-50 text-red-600 px-3 py-1 rounded-full border border-red-100">
                         Por Pagar: <span id="debt-total-summary" class="font-bold">0.00 $</span>
@@ -218,10 +228,8 @@
             <button onclick="toggleCalc()" class="text-gray-400 hover:text-white font-bold text-sm">✕</button>
         </div>
         
-        <!-- Pantalla de Calculadora -->
         <div id="calc-screen" class="bg-gray-800 text-right text-2xl p-3 rounded-lg font-mono tracking-wide overflow-x-auto min-h-[52px] flex items-center justify-end text-green-400 font-bold border border-gray-700">0</div>
 
-        <!-- Teclado de Calculadora -->
         <div class="grid grid-cols-4 gap-2 text-sm font-semibold">
             <button onclick="calcClear()" class="bg-red-500 hover:bg-red-600 p-3 rounded-lg text-white">C</button>
             <button onclick="calcInput('/')" class="bg-gray-700 hover:bg-gray-600 p-3 rounded-lg text-blue-400">÷</button>
@@ -249,7 +257,6 @@
     </div>
 
     <script>
-        // Lógica del Panel Flotante de la Calculadora
         let calcExpr = '0';
 
         function toggleCalc() {
@@ -286,7 +293,6 @@
 
         function calcEqual() {
             try {
-                // Evaluar expresión matemática limpiando caracteres no permitidos
                 let cleanExpr = calcExpr.replace(/[^0-9+\-*/.]/g, '');
                 let res = eval(cleanExpr);
                 calcExpr = Number.isInteger(res) ? res.toString() : res.toFixed(2).toString();
@@ -296,7 +302,7 @@
             updateCalcScreen();
         }
 
-        // Generar Manifest PWA dinámicamente
+        // PWA Manifest
         const myManifest = {
             "name": "Gestor Financiero VE",
             "short_name": "Finanzas VE",
@@ -317,7 +323,6 @@
         const manifestURL = URL.createObjectURL(blob);
         document.querySelector('#manifest-placeholder').setAttribute('href', manifestURL);
 
-        // Evento de Instalación PWA
         let deferredPrompt;
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
@@ -343,7 +348,6 @@
         let transactions = JSON.parse(localStorage.getItem('ve_finances_txs')) || [];
         let debts = JSON.parse(localStorage.getItem('ve_finances_debts')) || [];
 
-        // Cargar tasas guardadas o usar las por defecto
         let savedRates = JSON.parse(localStorage.getItem('ve_finances_rates')) || { bcv: 871.37, crypto: 972.95 };
         document.getElementById('rate-bcv').value = savedRates.bcv;
         document.getElementById('rate-crypto').value = savedRates.crypto;
@@ -356,6 +360,28 @@
             }
         }
 
+        function updatePersonFilterOptions() {
+            const filterSelect = document.getElementById('filter-person');
+            const currentSelected = filterSelect.value;
+            
+            // Extraer nombres únicos de las personas registradas
+            const persons = [...new Set(debts.map(d => d.person.trim()))].sort();
+            
+            filterSelect.innerHTML = '<option value="">-- Todos --</option>';
+            persons.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.innerText = p;
+                if (p === currentSelected) opt.selected = true;
+                filterSelect.appendChild(opt);
+            });
+        }
+
+        function clearPersonFilter() {
+            document.getElementById('filter-person').value = '';
+            renderDebts();
+        }
+
         function saveAndRender() {
             localStorage.setItem('ve_finances_txs', JSON.stringify(transactions));
             localStorage.setItem('ve_finances_debts', JSON.stringify(debts));
@@ -364,6 +390,7 @@
             const cryptoVal = parseFloat(document.getElementById('rate-crypto').value) || 0;
             localStorage.setItem('ve_finances_rates', JSON.stringify({ bcv: bcvVal, crypto: cryptoVal }));
 
+            updatePersonFilterOptions();
             renderHistory();
             renderDebts();
             calculateTotals();
@@ -387,7 +414,7 @@
             const id = document.getElementById('debt-id').value;
             const type = document.getElementById('debt-type').value;
             const currency = document.getElementById('debt-currency').value;
-            const person = document.getElementById('debt-person').value;
+            const person = document.getElementById('debt-person').value.trim();
             const amount = parseFloat(document.getElementById('debt-amount').value);
             const dueDate = document.getElementById('debt-date').value;
             const desc = document.getElementById('debt-desc').value;
@@ -477,22 +504,8 @@
                 }
             });
 
-            let pendingDebtUsd = 0;
-            let pendingCreditUsd = 0;
-
-            debts.filter(d => d.status === 'pendiente').forEach(d => {
-                let amtUsd = d.currency === 'USD' ? d.amount : d.amount / bcv;
-                if (d.type === 'por_pagar') {
-                    pendingDebtUsd += amtUsd;
-                } else {
-                    pendingCreditUsd += amtUsd;
-                }
-            });
-
             document.getElementById('total-ves').innerText = `${totalVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs.`;
             document.getElementById('total-usd-equiv').innerText = `${(totalVes / bcv).toFixed(2)} $`;
-            document.getElementById('debt-total-summary').innerText = `${pendingDebtUsd.toFixed(2)} $`;
-            document.getElementById('credit-total-summary').innerText = `${pendingCreditUsd.toFixed(2)} $`;
 
             document.getElementById('equiv-bcv').innerText = `${(totalVes / bcv).toFixed(2)} $`;
             document.getElementById('equiv-crypto').innerText = `${(totalVes / crypto).toFixed(2)} $`;
@@ -501,14 +514,37 @@
         function renderDebts() {
             const tbody = document.getElementById('debt-history');
             const bcv = parseFloat(document.getElementById('rate-bcv').value) || 1;
+            const selectedPerson = document.getElementById('filter-person').value;
             tbody.innerHTML = '';
 
-            if(debts.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-400">No hay deudas o cuentas pendientes registradas.</td></tr>`;
+            // Filtrar por persona si hay una seleccionada
+            let filteredDebts = debts;
+            if (selectedPerson) {
+                filteredDebts = debts.filter(d => d.person.trim().toLowerCase() === selectedPerson.toLowerCase());
+            }
+
+            // Recalcular resumen superior de por pagar/cobrar según el filtro activo
+            let pendingDebtUsd = 0;
+            let pendingCreditUsd = 0;
+
+            filteredDebts.filter(d => d.status === 'pendiente').forEach(d => {
+                let amtUsd = d.currency === 'USD' ? d.amount : d.amount / bcv;
+                if (d.type === 'por_pagar') {
+                    pendingDebtUsd += amtUsd;
+                } else {
+                    pendingCreditUsd += amtUsd;
+                }
+            });
+
+            document.getElementById('debt-total-summary').innerText = `${pendingDebtUsd.toFixed(2)} $`;
+            document.getElementById('credit-total-summary').innerText = `${pendingCreditUsd.toFixed(2)} $`;
+
+            if(filteredDebts.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-400">No hay cuentas para mostrar ${selectedPerson ? 'de esta persona' : ''}.</td></tr>`;
                 return;
             }
 
-            debts.sort((a, b) => {
+            filteredDebts.sort((a, b) => {
                 if (a.status !== b.status) {
                     return a.status === 'pendiente' ? -1 : 1;
                 }
@@ -517,7 +553,7 @@
 
             const todayStr = new Date().toISOString().split('T')[0];
 
-            debts.forEach(d => {
+            filteredDebts.forEach(d => {
                 const row = document.createElement('tr');
                 const isPorPagar = d.type === 'por_pagar';
                 const isPaid = d.status === 'pagado';
