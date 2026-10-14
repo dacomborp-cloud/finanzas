@@ -387,9 +387,8 @@
 
             const now = new Date();
             const currentYear = now.getFullYear();
-            const currentMonth = now.getMonth(); // 0 a 11
+            const currentMonth = now.getMonth();
 
-            // Filtrar transacciones que pertenecen a meses anteriores
             const pastTransactions = transactions.filter(t => {
                 const txDate = new Date(t.timestamp || t.id);
                 return txDate.getFullYear() < currentYear || (txDate.getFullYear() === currentYear && txDate.getMonth() < currentMonth);
@@ -397,7 +396,6 @@
 
             if (pastTransactions.length === 0) return;
 
-            // Agrupar transacciones pasadas por mes/año para cerrarlas por separado
             const groupedByMonth = {};
             pastTransactions.forEach(t => {
                 const txDate = new Date(t.timestamp || t.id);
@@ -411,9 +409,6 @@
                 groupedByMonth[key].txs.push(t);
             });
 
-            const bcv = parseFloat(document.getElementById('rate-bcv').value) || 1;
-
-            // Crear el reporte mensual para cada mes antiguo detectado
             Object.values(groupedByMonth).forEach(group => {
                 const monthName = group.dateObj.toLocaleDateString('es-VE', { month: 'long', year: 'numeric' });
                 const monthTitle = monthName.charAt(0).toUpperCase() + monthName.slice(1);
@@ -422,7 +417,8 @@
                 let totalEgresosVes = 0;
 
                 group.txs.forEach(t => {
-                    let valVes = t.currency === 'USD' ? t.amount * bcv : t.amount;
+                    // Mantener fijas las conversiones al valor asignado a la transacción
+                    let valVes = t.amountVes !== undefined ? t.amountVes : (t.currency === 'USD' ? t.amount * (t.rateBCV || 1) : t.amount);
                     if (t.type === 'ingreso') {
                         totalIngresosVes += valVes;
                     } else {
@@ -430,18 +426,19 @@
                     }
                 });
 
+                const lastBcv = parseFloat(document.getElementById('rate-bcv').value) || 1;
+
                 monthlyReports.unshift({
                     id: Date.now() + Math.random(),
                     period: monthTitle,
                     ingresosVes: totalIngresosVes,
                     egresosVes: totalEgresosVes,
                     netoVes: totalIngresosVes - totalEgresosVes,
-                    bcvRate: bcv,
+                    bcvRate: lastBcv,
                     dateClosed: 'Automático ' + new Date().toLocaleDateString('es-VE')
                 });
             });
 
-            // Dejar en el historial diario solo las transacciones del mes actual
             transactions = transactions.filter(t => {
                 const txDate = new Date(t.timestamp || t.id);
                 return txDate.getFullYear() === currentYear && txDate.getMonth() === currentMonth;
@@ -502,15 +499,22 @@
             const currency = document.getElementById('tx-currency').value;
             const amount = parseFloat(document.getElementById('tx-amount').value);
             const desc = document.getElementById('tx-desc').value;
+            const bcvRate = parseFloat(document.getElementById('rate-bcv').value) || 1;
 
             const now = new Date();
+            
+            // Fijar los bolívares reales exactos del momento del registro
+            const amountVes = currency === 'USD' ? amount * bcvRate : amount;
+
             transactions.push({ 
                 id: now.getTime(), 
                 timestamp: now.getTime(),
                 dateStr: now.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' }),
                 type, 
                 currency, 
-                amount, 
+                amount,
+                amountVes, // Se congela el monto en Bs.
+                rateBCV: bcvRate,
                 desc 
             });
 
@@ -570,7 +574,14 @@
         }
 
         function toggleDebtStatus(id) {
-            debts = debts.map(d => d.id === id ? { ...d, status: d.status === 'pendiente' ? 'pagado' : 'pendiente' } : d);
+            const bcvRate = parseFloat(document.getElementById('rate-bcv').value) || 1;
+            debts = debts.map(d => {
+                if (d.id === id) {
+                    const newStatus = d.status === 'pendiente' ? 'pagado' : 'pendiente';
+                    return { ...d, status: newStatus, paidRate: newStatus === 'pagado' ? bcvRate : null };
+                }
+                return d;
+            });
             saveAndRender();
         }
 
@@ -604,7 +615,7 @@
             let totalEgresosVes = 0;
 
             transactions.forEach(t => {
-                let valVes = t.currency === 'USD' ? t.amount * bcv : t.amount;
+                let valVes = t.amountVes !== undefined ? t.amountVes : (t.currency === 'USD' ? t.amount * bcv : t.amount);
                 if (t.type === 'ingreso') {
                     totalIngresosVes += valVes;
                 } else {
@@ -650,20 +661,21 @@
 
             let totalVes = 0;
 
-            // Transacciones diarias acumuladas
+            // Transacciones diarias acumuladas (monto fijo en Bs)
             transactions.forEach(t => {
-                let valVes = t.currency === 'USD' ? t.amount * bcv : t.amount;
+                let valVes = t.amountVes !== undefined ? t.amountVes : (t.currency === 'USD' ? t.amount * bcv : t.amount);
                 totalVes += (t.type === 'ingreso' ? valVes : -valVes);
             });
 
-            // Cierres de meses pasados acumulados
+            // Cierres de meses pasados
             monthlyReports.forEach(m => {
                 totalVes += m.netoVes;
             });
 
-            // Deudas Pagadas
+            // Deudas Pagadas / Cobradas
             debts.filter(d => d.status === 'pagado').forEach(d => {
-                let valVes = d.currency === 'USD' ? d.amount * bcv : d.amount;
+                let rateToUse = d.paidRate || bcv;
+                let valVes = d.currency === 'USD' ? d.amount * rateToUse : d.amount;
                 if (d.type === 'por_cobrar') {
                     totalVes += valVes;
                 } else {
@@ -671,6 +683,7 @@
                 }
             });
 
+            // El total en Bs permanece intacto y la equivalencia en USD se recalcula con la Tasa BCV actual
             document.getElementById('total-ves').innerText = `${totalVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs.`;
             document.getElementById('total-usd-equiv').innerText = `${(totalVes / bcv).toFixed(2)} $`;
 
@@ -828,7 +841,6 @@
             });
         }
 
-        // Ejecutar chequeo de mes automático al cargar la app
         checkAndAutoCloseMonth();
         saveAndRender();
     </script>
