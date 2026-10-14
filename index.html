@@ -61,12 +61,12 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-xs font-medium text-gray-600 mb-1">Tasa BCV (Oficial)</label>
-                    <input type="number" id="rate-bcv" step="0.01" value="873.87" oninput="saveAndRender()" 
+                    <input type="number" id="rate-bcv" step="0.01" value="873.87" oninput="saveRatesOnly()" 
                         class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-semibold">
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-gray-600 mb-1">Tasa Binance / USDT</label>
-                    <input type="number" id="rate-crypto" step="0.01" value="1004.93" oninput="saveAndRender()" 
+                    <input type="number" id="rate-crypto" step="0.01" value="1004.93" oninput="saveRatesOnly()" 
                         class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-semibold">
                 </div>
             </div>
@@ -376,10 +376,23 @@
         let transactions = JSON.parse(localStorage.getItem('ve_finances_txs')) || [];
         let debts = JSON.parse(localStorage.getItem('ve_finances_debts')) || [];
         let monthlyReports = JSON.parse(localStorage.getItem('ve_finances_monthly')) || [];
+        let balanceVES = parseFloat(localStorage.getItem('ve_finances_balance_ves')) || 0;
 
         let savedRates = JSON.parse(localStorage.getItem('ve_finances_rates')) || { bcv: 873.87, crypto: 1004.93 };
         document.getElementById('rate-bcv').value = savedRates.bcv;
         document.getElementById('rate-crypto').value = savedRates.crypto;
+
+        // GUARDAR SOLO LAS TASAS SIN RECALCULAR EL SALDO EN BS
+        function saveRatesOnly() {
+            const bcvVal = parseFloat(document.getElementById('rate-bcv').value) || 0;
+            const cryptoVal = parseFloat(document.getElementById('rate-crypto').value) || 0;
+            localStorage.setItem('ve_finances_rates', JSON.stringify({ bcv: bcvVal, crypto: cryptoVal }));
+
+            // Solo actualiza las tarjetas visuales de equivalencias en Dólares
+            renderHeaderBalance();
+            renderDebts();
+            renderHistory();
+        }
 
         // SISTEMA DE CIERRE AUTOMÁTICO AL CAMBIAR DE MES
         function checkAndAutoCloseMonth() {
@@ -417,8 +430,7 @@
                 let totalEgresosVes = 0;
 
                 group.txs.forEach(t => {
-                    // Mantener fijas las conversiones al valor asignado a la transacción
-                    let valVes = t.amountVes !== undefined ? t.amountVes : (t.currency === 'USD' ? t.amount * (t.rateBCV || 1) : t.amount);
+                    let valVes = t.amountVes;
                     if (t.type === 'ingreso') {
                         totalIngresosVes += valVes;
                     } else {
@@ -481,16 +493,26 @@
             localStorage.setItem('ve_finances_txs', JSON.stringify(transactions));
             localStorage.setItem('ve_finances_debts', JSON.stringify(debts));
             localStorage.setItem('ve_finances_monthly', JSON.stringify(monthlyReports));
-
-            const bcvVal = parseFloat(document.getElementById('rate-bcv').value) || 0;
-            const cryptoVal = parseFloat(document.getElementById('rate-crypto').value) || 0;
-            localStorage.setItem('ve_finances_rates', JSON.stringify({ bcv: bcvVal, crypto: cryptoVal }));
+            localStorage.setItem('ve_finances_balance_ves', balanceVES.toString());
 
             updatePersonFilterOptions();
+            renderHeaderBalance();
             renderHistory();
             renderDebts();
             renderMonthlyReports();
-            calculateTotals();
+        }
+
+        function renderHeaderBalance() {
+            const bcv = parseFloat(document.getElementById('rate-bcv').value) || 1;
+            const crypto = parseFloat(document.getElementById('rate-crypto').value) || 1;
+
+            // Muestra los Bolívares guardados sin alterarlos
+            document.getElementById('total-ves').innerText = `${balanceVES.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs.`;
+            
+            // Recalcula solo las equivalencias en Dólares según la tasa actual
+            document.getElementById('total-usd-equiv').innerText = `${(balanceVES / bcv).toFixed(2)} $`;
+            document.getElementById('equiv-bcv').innerText = `${(balanceVES / bcv).toFixed(2)} $`;
+            document.getElementById('equiv-crypto').innerText = `${(balanceVES / crypto).toFixed(2)} $`;
         }
 
         function addTransaction(e) {
@@ -502,9 +524,14 @@
             const bcvRate = parseFloat(document.getElementById('rate-bcv').value) || 1;
 
             const now = new Date();
-            
-            // Fijar los bolívares reales exactos del momento del registro
             const amountVes = currency === 'USD' ? amount * bcvRate : amount;
+
+            // Actualizar el pozo acumulado de Bolívares
+            if (type === 'ingreso') {
+                balanceVES += amountVes;
+            } else {
+                balanceVES -= amountVes;
+            }
 
             transactions.push({ 
                 id: now.getTime(), 
@@ -513,7 +540,7 @@
                 type, 
                 currency, 
                 amount,
-                amountVes, // Se congela el monto en Bs.
+                amountVes,
                 rateBCV: bcvRate,
                 desc 
             });
@@ -575,13 +602,32 @@
 
         function toggleDebtStatus(id) {
             const bcvRate = parseFloat(document.getElementById('rate-bcv').value) || 1;
+            
             debts = debts.map(d => {
                 if (d.id === id) {
-                    const newStatus = d.status === 'pendiente' ? 'pagado' : 'pendiente';
-                    return { ...d, status: newStatus, paidRate: newStatus === 'pagado' ? bcvRate : null };
+                    const willBePaid = d.status === 'pendiente';
+                    const amountVes = d.currency === 'USD' ? d.amount * bcvRate : d.amount;
+
+                    if (willBePaid) {
+                        // Al marcar como cobrada/pagada, afecta el saldo en Bs. de forma definitiva
+                        if (d.type === 'por_cobrar') balanceVES += amountVes;
+                        else balanceVES -= amountVes;
+                    } else {
+                        // Al revertir a pendiente, revierte el monto
+                        if (d.type === 'por_cobrar') balanceVES -= (d.paidVes || amountVes);
+                        else balanceVES += (d.paidVes || amountVes);
+                    }
+
+                    return { 
+                        ...d, 
+                        status: willBePaid ? 'pagado' : 'pendiente', 
+                        paidRate: willBePaid ? bcvRate : null,
+                        paidVes: willBePaid ? amountVes : null
+                    };
                 }
                 return d;
             });
+
             saveAndRender();
         }
 
@@ -592,6 +638,15 @@
         }
 
         function deleteTransaction(id) {
+            const tx = transactions.find(t => t.id === id);
+            if (tx) {
+                // Devolver o restar los Bolívares originales al borrar la transacción
+                if (tx.type === 'ingreso') {
+                    balanceVES -= tx.amountVes;
+                } else {
+                    balanceVES += tx.amountVes;
+                }
+            }
             transactions = transactions.filter(t => t.id !== id);
             saveAndRender();
         }
@@ -615,7 +670,7 @@
             let totalEgresosVes = 0;
 
             transactions.forEach(t => {
-                let valVes = t.amountVes !== undefined ? t.amountVes : (t.currency === 'USD' ? t.amount * bcv : t.amount);
+                let valVes = t.amountVes;
                 if (t.type === 'ingreso') {
                     totalIngresosVes += valVes;
                 } else {
@@ -646,49 +701,14 @@
         }
 
         function clearData() {
-            if(confirm("¿Seguro que deseas borrar todos los registros, deudas e historial de cierres?")) {
+            if(confirm("¿Seguro que deseas borrar todos los registros, saldo consolidado, deudas e historial de cierres?")) {
                 transactions = [];
                 debts = [];
                 monthlyReports = [];
+                balanceVES = 0;
                 resetDebtForm();
                 saveAndRender();
             }
-        }
-
-        function calculateTotals() {
-            const bcv = parseFloat(document.getElementById('rate-bcv').value) || 1;
-            const crypto = parseFloat(document.getElementById('rate-crypto').value) || 1;
-
-            let totalVes = 0;
-
-            // Transacciones diarias acumuladas (monto fijo en Bs)
-            transactions.forEach(t => {
-                let valVes = t.amountVes !== undefined ? t.amountVes : (t.currency === 'USD' ? t.amount * bcv : t.amount);
-                totalVes += (t.type === 'ingreso' ? valVes : -valVes);
-            });
-
-            // Cierres de meses pasados
-            monthlyReports.forEach(m => {
-                totalVes += m.netoVes;
-            });
-
-            // Deudas Pagadas / Cobradas
-            debts.filter(d => d.status === 'pagado').forEach(d => {
-                let rateToUse = d.paidRate || bcv;
-                let valVes = d.currency === 'USD' ? d.amount * rateToUse : d.amount;
-                if (d.type === 'por_cobrar') {
-                    totalVes += valVes;
-                } else {
-                    totalVes -= valVes;
-                }
-            });
-
-            // El total en Bs permanece intacto y la equivalencia en USD se recalcula con la Tasa BCV actual
-            document.getElementById('total-ves').innerText = `${totalVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs.`;
-            document.getElementById('total-usd-equiv').innerText = `${(totalVes / bcv).toFixed(2)} $`;
-
-            document.getElementById('equiv-bcv').innerText = `${(totalVes / bcv).toFixed(2)} $`;
-            document.getElementById('equiv-crypto').innerText = `${(totalVes / crypto).toFixed(2)} $`;
         }
 
         function renderDebts() {
